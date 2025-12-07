@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import re
 import requests
@@ -9,6 +10,15 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = FastAPI()
+
+# --- FIX CORS ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # cho phép mọi domain (GitHub Pages, localhost...)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 LINE_RE = re.compile(
     r'^(?:https?://)?(?P<host>[^:/\s]+):(?P<port>\d+):(?P<user>[^:]+):(?P<pwd>.+)$',
@@ -98,4 +108,3 @@ def scan_file(req: ScanRequest):
 @app.get("/")
 def root():
     return {"status": "WHM/cPanel Checker API running"}
-      
