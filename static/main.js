@@ -4,7 +4,7 @@
 
 // ⚠️ Nhớ sửa LINK API Render của bạn nếu khác!
 // Ví dụ: [https://whm-cpanel-checker.onrender.com/scan](https://whm-cpanel-checker.onrender.com/scan)
-const API_URL = window.location.origin + "/scan";
+const API_URL = "/scan";
 
 // ===============================
 // Đọc file TXT
