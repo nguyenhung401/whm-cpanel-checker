@@ -1,1 +1,57 @@
-<!DOCTYPE html><html><body>Index placeholder</body></html>
+<!DOCTYPE html>
+
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>WHM / cPanel / SSH / FTP Checker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+```
+<link rel="stylesheet" href="static/style.css">
+```
+
+</head>
+
+<body>
+<div class="container">
+    <h1>🔥 WHM / cPanel / DirectAdmin / SSH / FTP Checker</h1>
+
+```
+<p class="desc">Công cụ kiểm tra đa nền tảng: WHM, cPanel, DirectAdmin, Plesk, Webmin, SSH, FTP, SMTP…<br>
+Chỉ cần dán danh sách hoặc upload file .TXT</p>
+
+<!-- Upload file -->
+<div class="upload-box">
+    <label>📁 Chọn file TXT:</label><br>
+    <input type="file" id="fileInput" accept=".txt">
+</div>
+
+<p><b>Hoặc dán nội dung:</b></p>
+<textarea id="textInput" placeholder="host.com:2087:user:password"></textarea>
+
+<button onclick="startScan()">🚀 Scan ngay</button>
+<button onclick="downloadCSV()">📥 Tải CSV</button>
+
+<div id="info" class="info"></div>
+
+<table id="resultsTable">
+    <thead>
+        <tr>
+            <th>Host</th>
+            <th>Port</th>
+            <th>User</th>
+            <th>Loại</th>
+            <th>Trạng thái</th>
+            <th>Chi tiết</th>
+        </tr>
+    </thead>
+    <tbody id="resultsBody"></tbody>
+</table>
+```
+
+</div>
+
+<script src="static/main.js"></script>
+
+</body>
+</html>
