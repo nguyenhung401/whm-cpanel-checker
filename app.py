@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -7,30 +7,24 @@ import requests
 from requests.auth import HTTPBasicAuth
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import urllib3
-import smtplib
-import ftplib
-import paramiko
-import os
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = FastAPI()
 
-# Serve folder static
+# ------------------------------
+# Serve UI
+# ------------------------------
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
-# ============================
-# Serve index.html
-# ============================
 @app.get("/", response_class=HTMLResponse)
 def home():
     return FileResponse("index.html")
 
 
-# ============================
-# Parse format: host:port:user:pass
-# ============================
+# ------------------------------
+# Checker code
+# ------------------------------
 LINE_RE = re.compile(
     r'^(?:https?://)?(?P<host>[^:/\s]+):(?P<port>\d+):(?P<user>[^:]+):(?P<pwd>.+)$',
     re.IGNORECASE
@@ -47,10 +41,6 @@ def parse_line(line):
         "password": m.group("pwd")
     }
 
-
-# ============================
-# AUTO DETECT TYPE
-# ============================
 def detect_type(port):
     port = int(port)
     if port in (2087, 2086): return "whm"
@@ -60,46 +50,77 @@ def detect_type(port):
     if port == 10000: return "webmin"
     if port == 21: return "ftp"
     if port == 22: return "ssh"
-    if port in (25,465,587,2525): return "smtp"
+    if port in (25, 465, 587, 2525): return "smtp"
     return "unknown"
 
-
-# ============================
-# CHECK FUNCTIONS
-# ============================
 def check_whm(host, port, user, pw):
     try:
-        url = f"https://{host}:{port}/json-api/listaccts?api.version=1"
-        r = requests.get(url, auth=HTTPBasicAuth(user, pw), timeout=8, verify=False)
-        return (r.status_code == 200), "WHM OK" if r.status_code == 200 else f"HTTP {r.status_code}"
+        r = requests.get(
+            f"https://{host}:{port}/json-api/listaccts?api.version=1",
+            auth=HTTPBasicAuth(user, pw),
+            timeout=10,
+            verify=False
+        )
+        return (r.status_code == 200), f"HTTP {r.status_code}"
     except Exception as e:
         return False, f"ERR: {e}"
 
 def check_cp(host, port, user, pw):
     try:
-        url = f"https://{host}:{port}/json-api/cpanel?cpanel_jsonapi_version=2&cpanel_jsonapi_module=Lang&cpanel_jsonapi_func=get_version"
-        r = requests.get(url, auth=HTTPBasicAuth(user, pw), timeout=8, verify=False)
-        return (r.status_code == 200), "cPanel OK" if r.status_code == 200 else "cPanel FAIL"
+        r = requests.get(
+            f"https://{host}:{port}/json-api/cpanel"
+            "?cpanel_jsonapi_version=2&cpanel_jsonapi_module=Lang"
+            "&cpanel_jsonapi_func=get_version",
+            auth=HTTPBasicAuth(user, pw),
+            timeout=10,
+            verify=False
+        )
+        return (r.status_code == 200), f"HTTP {r.status_code}"
     except Exception as e:
         return False, f"ERR: {e}"
 
-def check_directadmin(host, port, user, pw):
-    try:
-        url = f"https://{host}:{port}/CMD_API_SHOW_DOMAINS"
-        r = requests.get(url, auth=HTTPBasicAuth(user, pw), timeout=8, verify=False)
-        return ("list" in r.text.lower()), "DirectAdmin OK" if "list" in r.text.lower() else "DirectAdmin FAIL"
-    except Exception as e:
-        return False, f"ERR: {e}"
+def process_lines(lines):
+    results = []
 
-def check_plesk(host, port, user, pw):
-    try:
-        url = f"https://{host}:{port}/api/v2/domains"
-        r = requests.get(url, auth=(user, pw), timeout=8, verify=False)
-        return (r.status_code == 200), f"Plesk HTTP {r.status_code}"
-    except Exception as e:
-        return False, f"ERR: {e}"
+    def worker(line):
+        p = parse_line(line)
+        if not p:
+            return {"line": line, "status": "BAD_FORMAT"}
 
-def check_webmin(host, port, user, pw):
+        host, port, user, pw = p["host"], p["port"], p["user"], p["password"]
+        typ = detect_type(port)
+
+        if typ == "whm":
+            ok, msg = check_whm(host, port, user, pw)
+        elif typ == "cpanel":
+            ok, msg = check_cp(host, port, user, pw)
+        else:
+            ok, msg = False, "Unsupported type"
+
+        return {
+            "line": line,
+            "host": host,
+            "port": port,
+            "user": user,
+            "type": typ,
+            "status": "OK" if ok else "FAIL",
+            "message": msg
+        }
+
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = [ex.submit(worker, line) for line in lines]
+        for f in as_completed(futures):
+            results.append(f.result())
+
+    return results
+
+class ScanRequest(BaseModel):
+    text: str
+
+@app.post("/scan")
+def scan(req: ScanRequest):
+    lines = [ln.strip() for ln in req.text.splitlines() if ln.strip()]
+    return {"results": process_lines(lines)}
     try:
         url = f"https://{host}:{port}/session_login.cgi"
         r = requests.post(url, data={"user": user, "pass": pw}, timeout=8, verify=False)
